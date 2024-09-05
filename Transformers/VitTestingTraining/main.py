@@ -8,7 +8,7 @@ import torchvision
 import torchvision.transforms as transforms
 from torch import nn, optim
 from patch.patchEmbeddings import ViTForClassfication
-
+#
 
 def save_experiment(experiment_name, config, model, train_losses, test_losses, accuracies, base_dir="experiments"):
     outdir = os.path.join(base_dir, experiment_name)
