@@ -6,6 +6,7 @@ import torch
 from torch.nn import functional as F
 import torchvision
 import torchvision.transforms as transforms
+from torch import nn, optim
 from patch.patchEmbeddings import ViTForClassfication
 
 
@@ -152,3 +153,27 @@ def visualize_attention(model, output=None, device="cuda"):
         plt.savefig(output)
     plt.show()
 
+
+# Training Vit
+
+exp_name = "vit_experiment"
+batch_size = 32
+epochs = 10
+
+device = "cuda" if torch.cuda.is_available() else "cpu"
+
+config = {
+    "patch_size": 4,  # Input image size: 32x32 -> 8x8 patches
+    "hidden_size": 48,
+    "num_hidden_layers": 4,
+    "num_attention_heads": 4,
+    "intermediate_size": 4 * 48, # 4 * hidden_size
+    "hidden_dropout_prob": 0.0,
+    "attention_probs_dropout_prob": 0.0,
+    "initializer_range": 0.02,
+    "image_size": 32,
+    "num_classes": 10, # num_classes of CIFAR10
+    "num_channels": 3,
+    "qkv_bias": True,
+    "use_faster_attention": True,
+}
