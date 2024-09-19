@@ -346,3 +346,5 @@ class ViTForClassfication(nn.Module):
                 mean=0.0,
                 std=self.config["initializer_range"],
             ).to(module.cls_token.dtype)
+
+

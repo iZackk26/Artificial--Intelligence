@@ -5,10 +5,13 @@ import numpy as np
 import torch
 from torch.nn import functional as F
 import torchvision
+from torch.optim.adamw import AdamW
 import torchvision.transforms as transforms
 from torch import nn, optim
 from patch.patchEmbeddings import ViTForClassfication
-#
+
+from trainer.trainer import Trainer
+from utils.utils import prepare_data
 
 def save_experiment(experiment_name, config, model, train_losses, test_losses, accuracies, base_dir="experiments"):
     outdir = os.path.join(base_dir, experiment_name)
@@ -159,6 +162,8 @@ def visualize_attention(model, output=None, device="cuda"):
 exp_name = "vit_experiment"
 batch_size = 32
 epochs = 10
+lr = 1e-2  #@param {type: "number"}
+save_model_every = 0 #@param {type: "integer"}
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
@@ -172,8 +177,26 @@ config = {
     "attention_probs_dropout_prob": 0.0,
     "initializer_range": 0.02,
     "image_size": 32,
-    "num_classes": 10, # num_classes of CIFAR10
+    "num_classes": 2, # num_classes of CIFAR10
     "num_channels": 3,
     "qkv_bias": True,
     "use_faster_attention": True,
 }
+
+def main():
+    # Training parameters
+    save_model_every_n_epochs = save_model_every 
+    print("Saved model")
+    # Load the CIFAR10 dataset
+    trainloader, testloader, _ = prepare_data(batch_size=batch_size)
+    # Create the model, optimizer, loss function and trainer
+    model = ViTForClassfication(config)
+    print("Configs")
+    optimizer = AdamW(model.parameters(), lr=lr, weight_decay=1e-2)
+    loss_fn = nn.CrossEntropyLoss()
+    print("Training")
+    trainer = Trainer(model, optimizer, loss_fn, exp_name, device=device)
+    trainer.train(trainloader, testloader, epochs, config, save_model_every_n_epochs=save_model_every_n_epochs)
+
+if __name__ == "__main__":
+    main()
