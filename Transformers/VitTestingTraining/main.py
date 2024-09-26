@@ -82,22 +82,28 @@ def visualize_images():
 
 
 @torch.no_grad()
-def visualize_attention(model, output=None, device="cuda"):
+def visualize_attention(model, output=None, device=None):
     """
     Visualize the attention maps of the first 4 images.
 
     """
+    if device is None:
+        if torch.backends.mps.is_available() and torch.backends.mps.is_built():
+            device = torch.device("mps")
+        elif torch.cuda.is_available():
+            device = torch.device("cuda")
+        else:
+            device = torch.device("cpu")
     model.eval()
-    # Load random images
-    num_images = 30
-    # Load raw images without any transformations
+    model = model.to(device)
+    # Cargar imágenes sin transformaciones
     testset_raw = torchvision.datasets.ImageFolder(root='./data/test', transform=None)
     classes = testset_raw.classes
-    indices = torch.randperm(len(testset_raw))[:num_images].tolist()
+    indices = torch.randperm(len(testset_raw))[:30].tolist()
     raw_images = [testset_raw[i][0] for i in indices]
     labels = [testset_raw[i][1] for i in indices]
-    
-    # Apply transformations to get tensors for model input
+
+    # Aplicar transformaciones para obtener tensores para la entrada del modelo
     test_transform = transforms.Compose([
         transforms.Resize((32, 32)),
         transforms.ToTensor(),
@@ -105,64 +111,40 @@ def visualize_attention(model, output=None, device="cuda"):
     ])
     images = [test_transform(img) for img in raw_images]
     images = torch.stack(images).to(device)
-    model = model.to(device)  
-    # Alternativa: asegurar que todas las imágenes se conviertan a Tensor
-    images = []
-    for image in raw_images:
-        pil_image = Image.fromarray(image.astype('uint8'))
-        tensor_image = test_transform(pil_image)
-        images.append(tensor_image)
-    
-    # Check that images are now tensors
-    if all(isinstance(img, torch.Tensor) for img in images):
-        print("All images successfully converted to tensors.")
-    
-    # Apilar las imágenes en un solo tensor
-    images = torch.stack(images)
-    # Move the images to the device
-    images = images.to(device)
-    model = model.to(device)
-    # Get the attention maps from the last block
+
+    # Obtener las predicciones y mapas de atención
     logits, attention_maps = model(images, output_attentions=True)
-    # Get the predictions
     predictions = torch.argmax(logits, dim=1)
-    # Concatenate the attention maps from all blocks
     attention_maps = torch.cat(attention_maps, dim=1)
-    # select only the attention maps of the CLS token
     attention_maps = attention_maps[:, :, 0, 1:]
-    # Then average the attention maps of the CLS token over all the heads
     attention_maps = attention_maps.mean(dim=1)
-    # Reshape the attention maps to a square
     num_patches = attention_maps.size(-1)
     size = int(math.sqrt(num_patches))
     attention_maps = attention_maps.view(-1, size, size)
-    # Resize the map to the size of the image
     attention_maps = attention_maps.unsqueeze(1)
     attention_maps = F.interpolate(attention_maps, size=(32, 32), mode='bilinear', align_corners=False)
     attention_maps = attention_maps.squeeze(1)
 
-    # Convert raw images to numpy arrays for visualization
+    # Convertir imágenes crudas a arrays de NumPy para visualización
     raw_images_np = [np.array(img.resize((32, 32))) for img in raw_images]
 
-    # Plot the images and the attention maps
+    # Código para graficar
     fig = plt.figure(figsize=(20, 10))
     mask = np.concatenate([np.ones((32, 32)), np.zeros((32, 32))], axis=1)
+    num_images = len(raw_images_np)
     for i in range(num_images):
         ax = fig.add_subplot(6, 5, i+1, xticks=[], yticks=[])
-        img = np.concatenate((raw_images[i], raw_images[i]), axis=1)
+        img = np.concatenate((raw_images_np[i], raw_images_np[i]), axis=1)
         ax.imshow(img)
-        # Mask out the attention map of the left image
         extended_attention_map = np.concatenate((np.zeros((32, 32)), attention_maps[i].cpu()), axis=1)
         extended_attention_map = np.ma.masked_where(mask==1, extended_attention_map)
         ax.imshow(extended_attention_map, alpha=0.5, cmap='jet')
-        # Show the ground truth and the prediction
         gt = classes[labels[i]]
         pred = classes[predictions[i]]
         ax.set_title(f"gt: {gt} / pred: {pred}", color=("green" if gt==pred else "red"))
     if output is not None:
         plt.savefig(output)
     plt.show()
-
 
 
 
