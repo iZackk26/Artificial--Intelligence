@@ -41,6 +41,7 @@ def save_checkpoint(experiment_name, model, epoch, base_dir="experiments"):
     os.makedirs(outdir, exist_ok=True)
     cpfile = os.path.join(outdir, f'model_{epoch}.pt')
     torch.save(model.state_dict(), cpfile)
+    torch.save(model, cpfile)
 
 
 def load_experiment(experiment_name, checkpoint_name="model_final.pt", base_dir="experiments"):
@@ -89,20 +90,22 @@ def visualize_attention(model, output=None, device="cuda"):
     model.eval()
     # Load random images
     num_images = 30
-    testset = torchvision.datasets.ImageFolder(root='./data/test', transform=transforms.ToTensor()) # Cambiar el path por el nuevo
-    classes = testset.classes
-    # Pick 30 samples randomly
-    indices = torch.randperm(len(testset))[:num_images].tolist()
-    raw_images = [np.asarray(testset[i][0]) for i in indices]
-    labels = [testset[i][1] for i in indices]
-
-    # Convert the images to tensors
-    test_transform = transforms.Compose([
-        transforms.Resize((32, 32)),  # Ajusta el tamaño
-        transforms.ToTensor(),  # Convierte la imagen a tensor
-        transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))  # Normalización
-    ])
+    # Load raw images without any transformations
+    testset_raw = torchvision.datasets.ImageFolder(root='./data/test', transform=None)
+    classes = testset_raw.classes
+    indices = torch.randperm(len(testset_raw))[:num_images].tolist()
+    raw_images = [testset_raw[i][0] for i in indices]
+    labels = [testset_raw[i][1] for i in indices]
     
+    # Apply transformations to get tensors for model input
+    test_transform = transforms.Compose([
+        transforms.Resize((32, 32)),
+        transforms.ToTensor(),
+        transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
+    ])
+    images = [test_transform(img) for img in raw_images]
+    images = torch.stack(images).to(device)
+    model = model.to(device)  
     # Alternativa: asegurar que todas las imágenes se conviertan a Tensor
     images = []
     for image in raw_images:
@@ -137,6 +140,10 @@ def visualize_attention(model, output=None, device="cuda"):
     attention_maps = attention_maps.unsqueeze(1)
     attention_maps = F.interpolate(attention_maps, size=(32, 32), mode='bilinear', align_corners=False)
     attention_maps = attention_maps.squeeze(1)
+
+    # Convert raw images to numpy arrays for visualization
+    raw_images_np = [np.array(img.resize((32, 32))) for img in raw_images]
+
     # Plot the images and the attention maps
     fig = plt.figure(figsize=(20, 10))
     mask = np.concatenate([np.ones((32, 32)), np.zeros((32, 32))], axis=1)
@@ -155,6 +162,9 @@ def visualize_attention(model, output=None, device="cuda"):
     if output is not None:
         plt.savefig(output)
     plt.show()
+
+
+
 
 
 # Training Vit
@@ -183,7 +193,8 @@ config = {
     "use_faster_attention": True,
 }
 
-def main():
+
+def train():
     # Training parameters
     save_model_every_n_epochs = save_model_every 
     print("Saved model")
@@ -197,6 +208,11 @@ def main():
     print("Training")
     trainer = Trainer(model, optimizer, loss_fn, exp_name, device=device)
     trainer.train(trainloader, testloader, epochs, config, save_model_every_n_epochs=save_model_every_n_epochs)
+
+
+def main():
+    config, model, train_losses, test_losses, accuracies = load_experiment(f"{exp_name}/")
+    visualize_attention(model, "atteton_visualize.png")
 
 if __name__ == "__main__":
     main()
